@@ -14,3 +14,15 @@
 # Metadata
 *.aliases
 *.lvlps
+
+
+# python 
+*/
+test_pic.py
+opencv_viewer.py
+align_frame.py
+app.py
+
+
+# image
+*.jpg
