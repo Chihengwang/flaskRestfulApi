@@ -12,6 +12,13 @@ cap = cv2.VideoCapture(0)
 # Parameters
 cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
 cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+# =================================================================
+# Global variable 
+pose_list=[]
+color_list=[]
+depth_list=[]
+mask_list=[]
+count=0
 # ==================================================================
 # testing data
 tasks = [
@@ -75,6 +82,7 @@ def create_6dof():
     # 這樣就可以轉成dict
     six_degreeOfFreedom=json.loads(six_degreeOfFreedom)
     print(six_degreeOfFreedom)
+    pose_list.append(six_degreeOfFreedom)
     # print("J1: ",six_degreeOfFreedom['J1'])
     # print("J2: ",six_degreeOfFreedom['J2'])
     # print("J3: ",six_degreeOfFreedom['J3'])
@@ -116,10 +124,15 @@ def delete_task(task_id):
 # 純粹希望pc端坐事情的 可以使用action name傳遞 注意後面的/不能夠省略
 @app.route('/todo/api/v1.0/actions/<string:action_name>/', methods=['GET'])
 def take_action(action_name):
+    global count
     print("url: '/todo/api/v1.0/actions/<string:action_name>'")
     if action_name==None:
         abort(404)
     # 新增action name即可
+    elif action_name=="show_list":
+        count+=1
+        print(count)
+        return jsonify({'msg': pose_list})
     elif action_name=="sayhi":
         return jsonify({'msg': "Hello"})
     else:
@@ -133,6 +146,10 @@ labview端就不需要傳參數給action parameter
 @app.route('/todo/api/v1.0/actions/<string:action_name>/<string:action_parameter>', methods=['GET'])
 def take_action_with_parameter(action_name,action_parameter):
     global cap
+    # =========================================================
+    # 這個主要是將照片存在MaskRCNN的training路徑，但假如沒有需要訓練 可以註解 那照片將會存在當前目錄下
+    base_dir="Models/MaskRCNN/samples/mydataset/graspingitem/"
+    # =========================================================
     # 基本上 裡面可以用來處理任何邏輯運算 以及需要執行甚麼動作
     print(action_name,action_parameter)
     if action_name==None:
@@ -141,15 +158,17 @@ def take_action_with_parameter(action_name,action_parameter):
     elif(action_name=='takepic'):
         # 這邊的action parameter就是folder name
         folder_name=action_parameter
-        if os.path.isdir(folder_name):
-            print("The photo is saving in: /",folder_name)
+        save_path=base_dir+folder_name
+        print(save_path)
+        if os.path.isdir(save_path):
+            print("The photo is saving in: /",save_path)
         else:
-            os.makedirs(folder_name)
+            os.makedirs(save_path)
         # Take picture setting up
         while True:
             ret, frame = cap.read()
             if ret==True:
-                cv2.imwrite(folder_name+"/"+"frame-" + time.strftime("%d-%m-%Y-%H-%M-%S") + ".png",frame)
+                cv2.imwrite(save_path+"/"+"frame-" + time.strftime("%d-%m-%Y-%H-%M-%S") + ".png",frame)
                 break
         return jsonify({'msg': "Success"})
     elif(action_name=="others"):
