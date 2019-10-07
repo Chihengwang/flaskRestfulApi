@@ -35,6 +35,7 @@ Flask restful api
 >>主要可以將照片排序到1...n 有新增的照片也會直接以最大的數字進行排序
 >>先cd 進去utils目錄下，執行 python maskrcnn_dataset_dealer.py將可以進行排序
 >>* 測試了global variable是否能夠被action 影響。結論是可以的!!!
+>>
 >2019/10/7
 >>* 更改了ubuntu裡面labelme json_to_dataset的檔案，並且測試了批量轉檔
 >>  使用方法就是在 env 的cmd cd到json的當前目錄 輸入 `labelme_json_to_dataset ./` 即可看到結果
