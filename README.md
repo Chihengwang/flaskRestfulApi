@@ -20,6 +20,7 @@ Flask restful api
 ### TODOLIST:
 
 * 實測軌跡規劃以及POST的功能(V)
+* 開始訓練資料
 * 需要做一個3d reconstuction 的演算法 結合maskrcnn
 * Utils裡面還需要補上json_to_dataset檔案、以及 取出mask的png檔案存到cv2_mask folder裡面
 --------------------------
@@ -34,3 +35,13 @@ Flask restful api
 >>主要可以將照片排序到1...n 有新增的照片也會直接以最大的數字進行排序
 >>先cd 進去utils目錄下，執行 python maskrcnn_dataset_dealer.py將可以進行排序
 >>* 測試了global variable是否能夠被action 影響。結論是可以的!!!
+>2019/10/7
+>>* 更改了ubuntu裡面labelme json_to_dataset的檔案，並且測試了批量轉檔
+>>  使用方法就是在 env 的cmd cd到json的當前目錄 輸入 `labelme_json_to_dataset ./` 即可看到結果
+>>* 新增了move_to_maskfolder.py檔案 主要將每個json裡面的label.png移動到cv2_mask的資料夾裡面
+>>* 準備資料的流程：
+>>  1. 收資料
+>>  2. 用 maskrcnn_dataset_dealer.py 排序資料
+>>  3. 用labelme 一張張標註並且產生json file存入 dataset/json folder 裡面
+>>  4. 在cmd裡面 cd到dataset/json 並且輸入`labelme_json_to_dataset ./`
+>>  5. 將批量的json folder 存到 labelme_json的folder裡面 並在cd utils 執行 `python move_to_maskfolder.py`
