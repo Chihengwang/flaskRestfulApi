@@ -11,7 +11,7 @@ def change_file_name(path):
     # root path
     root_path = os.path.abspath(os.path.dirname(os.getcwd()))
     print("Root path is "+root_path)
-    path=root_path+"\\"+path
+    path=root_path+"/"+path
     print(path)
     if os.path.isdir(path):
         count=1
@@ -45,5 +45,5 @@ def change_file_name(path):
 
 if __name__=='__main__':
 
-    ModelPath='Models\MaskRCNN\samples\mydataset\graspingitem\pic'
+    ModelPath='Models/MaskRCNN/samples/mydataset/graspingitem/pic'
     change_file_name(ModelPath)

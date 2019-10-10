@@ -20,9 +20,9 @@ Flask restful api
 ### TODOLIST:
 
 * 實測軌跡規劃以及POST的功能(V)
-* 開始訓練資料
-* 需要做一個3d reconstuction 的演算法 結合maskrcnn
-* Utils裡面還需要補上json_to_dataset檔案、以及 取出mask的png檔案存到cv2_mask folder裡面
+* 開始訓練資料(V)
+* Utils裡面還需要補上json_to_dataset檔案、以及 取出mask的png檔案存到cv2_mask folder裡面(V)
+* 需要做一個3d reconstuction 的演算法 結合maskrcnn,將model.detect的部份融入partial point cloud detect algorithm
 --------------------------
 ### Updated logs
 
@@ -46,3 +46,11 @@ Flask restful api
 >>  3. 用labelme 一張張標註並且產生json file存入 dataset/json folder 裡面
 >>  4. 在cmd裡面 cd到dataset/json 並且輸入`labelme_json_to_dataset ./`
 >>  5. 將批量的json folder 存到 labelme_json的folder裡面 並在cd utils 執行 `python move_to_maskfolder.py`
+>>
+>2019/10/10
+>>* successfully test train.py and fortest.py on MaskRCNN, which is cloned from [MaskRCNN](https://github.com/matterport/Mask_RCNN) 
+>> As I mentioned above, we can use the python scripts above to make your own dataset.
+>>* `tensorboard -logdir=logs/path_to_newest_weights` can take a look at your result from training data including validation
+>> dataset.
+>>* In Models/MaskRCNN/samples/mydataset/graspingitem folder, I provide the labeled data including original picture, json file
+>> (from Labelme software), json folder(from labelme_json_to_dataset script), mask folder(from move_to_maskfolder.py script)

@@ -149,7 +149,7 @@ def take_action_with_parameter(action_name,action_parameter):
     # 基本上 裡面可以用來處理任何邏輯運算 以及需要執行甚麼動作
     print(action_name,action_parameter)
     # pipeline.start(config)
-
+    time.sleep(1)
     if action_name==None:
         abort(404)
     # 假如有其他action需要parameter 則加入其他elif條件即可
@@ -174,7 +174,7 @@ def take_action_with_parameter(action_name,action_parameter):
             color_frame = frames.get_color_frame()
             if color_frame:
                 color_image = np.asanyarray(color_frame.get_data())
-                cv2.imwrite(folder_name+"/"+"frame-" + time.strftime("%d-%m-%Y-%H-%M-%S") + ".jpg",color_image)
+                cv2.imwrite(folder_name+"/"+"frame-" + time.strftime("%d-%m-%Y-%H-%M-%S") + ".png",color_image)
                 # pipeline.stop()
                 break
                 
