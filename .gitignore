@@ -18,6 +18,7 @@
 
 # python 
 Models/cocoapi
+Models/MaskRCNN
 test_pic.py
 opencv_viewer.py
 align_frame.py
