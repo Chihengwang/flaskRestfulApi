@@ -6,6 +6,7 @@ import os
 import cv2
 import time
 import json
+from ra605.arm_kinematic import *
 app = Flask(__name__)
 cap = cv2.VideoCapture(0)
 # =================================================================
@@ -82,7 +83,9 @@ def create_6dof():
     # 這樣就可以轉成dict
     six_degreeOfFreedom=json.loads(six_degreeOfFreedom)
     print(six_degreeOfFreedom)
-    pose_list.append(six_degreeOfFreedom)
+    t0_6=forward_kinematic(six_degreeOfFreedom)
+    print(t0_6)
+    pose_list.append(t0_6.tolist())
     # print("J1: ",six_degreeOfFreedom['J1'])
     # print("J2: ",six_degreeOfFreedom['J2'])
     # print("J3: ",six_degreeOfFreedom['J3'])
@@ -132,7 +135,10 @@ def take_action(action_name):
     elif action_name=="show_list":
         count+=1
         print(count)
-        return jsonify({'msg': pose_list})
+        json_string={
+            'msg': pose_list
+        }
+        return jsonify(json_string)
     elif action_name=="sayhi":
         return jsonify({'msg': "Hello"})
     else:
