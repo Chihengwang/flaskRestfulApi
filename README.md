@@ -65,5 +65,5 @@ Flask restful api
 >>* 完成multithread的測試(成功),放棄start detector的寫法(因為有GPU RAM 無法釋放的問題)
 >>* 完成get_photo_and_mask的route用來處理拍照並偵測mask 假如沒有return None 且不會append進去list
 >>* 新增check image number用來停止labview端的動作
->>[x] 仍須要完成ply檔案的儲存
->>[x] 完善收取6DOF的資料
+>>* [x] 仍須要完成ply檔案的儲存
+>>* [x] 完善收取6DOF的資料
