@@ -28,3 +28,4 @@ app.py
 # image
 *.jpg
 my_dataset/*
+*.png

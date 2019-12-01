@@ -60,3 +60,10 @@ Flask restful api
 >>* complete forword kinematic and inverse kinematic function of the RA605 and provide testing data below.
 >> You can verify the validation of the t0_6 and t0_6_ik. If true, then our result is correct.
 >>* integrate the arm_kinematic file into restapi_server file and successfully examine the correction of the process.
+>>
+>2019/12/01
+>>* 完成multithread的測試(成功),放棄start detector的寫法(因為有GPU RAM 無法釋放的問題)
+>>* 完成get_photo_and_mask的route用來處理拍照並偵測mask 假如沒有return None 且不會append進去list
+>>* 新增check image number用來停止labview端的動作
+>>[x] 仍須要完成ply檔案的儲存
+>>[x] 完善收取6DOF的資料

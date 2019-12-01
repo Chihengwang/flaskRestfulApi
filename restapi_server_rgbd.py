@@ -4,19 +4,71 @@ from flask import request
 from flask import abort
 import pyrealsense2 as rs
 import numpy as np
+import sys
 import os
 import cv2
 import time
 import json
+import tensorflow as tf
+import importlib
+from Models.maskrcnn_mask_generator import MaskGenerator
+from multiprocessing import Process,Pool
+from ra605.arm_kinematic import *
+# ===============================================================
+# Multithread function for detecting mask from MaskRCNN
+# How to use?
+"""
+Send in data as this format:
+For instance:
+data={
+    'target_label':"apple",
+    'image',[[]]
+}
+"""
+def detect_mask_function(data):
+    tf.reset_default_graph()
+    MASK_GENERATOR=MaskGenerator(CLASS_NAME)
+    MASK_GENERATOR.load_model()
+    mask=MASK_GENERATOR.generateMask(data['target_label'],data['image'])
+    mask_binary=np.where(mask==1,255,0)
+    cv2.imwrite(data['target_label']+".png",mask_binary)
+    # realse data from gpu
+    tf.keras.backend.clear_session()
+    del MASK_GENERATOR
+    return mask
+
+# ===============================================================
+# load pointnet
+pn_graph=tf.Graph()
+with pn_graph.as_default():
+    c=tf.constant(5.0)
+    assert c.graph is pn_graph
+
+# ================================================================
+# load MaskRCNN Model
+# HERE NEED TO SET UP ALL PARAMETER BY YOURSELF. SOMETHING YOU WANT TO GRASP
+CLASS_NAME = ['BG', 'apple','banana','box','cup','tape']
+
+MASK_GENERATOR=None
+# ----------------------------------------------------------------
+# Global variable
+CURRENT_POSTION=None
+pose_list=[]
+color_list=[]
+depth_list=[]
+mask_list=[]
 app = Flask(__name__)
 # =================================================================
 # Parameters
-# Configure depth and color streams
+# Configure depth and color streams for realsense d435
 pipeline = rs.pipeline()
 config = rs.config()
 config.enable_stream(rs.stream.depth, 640, 480, rs.format.z16, 30)
 config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
+align_to = rs.stream.color
+align = rs.align(align_to)
 # ==================================================================
+
 # testing data
 tasks = [
     {
@@ -71,6 +123,7 @@ def create_task():
 """
 @app.route('/todo/api/v1.0/data/send6dof', methods=['POST'])
 def create_6dof():
+    global CURRENT_POSTION
     print(request.json)
     if not request.json or not '6dof' in request.json:
         abort(400)
@@ -79,6 +132,8 @@ def create_6dof():
     # 這樣就可以轉成dict
     six_degreeOfFreedom=json.loads(six_degreeOfFreedom)
     print(six_degreeOfFreedom)
+    CURRENT_POSTION=forward_kinematic(six_degreeOfFreedom)
+    
     # print("J1: ",six_degreeOfFreedom['J1'])
     # print("J2: ",six_degreeOfFreedom['J2'])
     # print("J3: ",six_degreeOfFreedom['J3'])
@@ -120,7 +175,7 @@ def delete_task(task_id):
 # 純粹希望pc端坐事情的 可以使用action name傳遞 注意後面的/不能夠省略
 @app.route('/todo/api/v1.0/actions/<string:action_name>/', methods=['GET'])
 def take_action(action_name):
-    global pipeline,config
+    global pipeline,config,MASK_GENERATOR
     print("url: '/todo/api/v1.0/actions/<string:action_name>'")
     if action_name==None:
         abort(404)
@@ -133,7 +188,42 @@ def take_action(action_name):
     elif action_name=="finish_stream":
         pipeline.stop()
         return jsonify({'msg': "finish stream"})
+# ==========================================================================
+    # testing multithread with MaskRCNN model
+    elif action_name=="multithread":
+        data={}
+
+        image=cv2.imread('./color4.png')
+        print(image.shape)
+        # rgb == skimage
+        image=image[:,:,::-1]
+        data['image']=image
+        data['target_label']="cup"
+        pool=Pool(1)
+        mask_list.append(pool.apply(detect_mask_function,(data,)))
+        pool.close()
+        pool.join()
+        del pool
+        return jsonify({'msg': "multithread test!!!"})
+    elif action_name=="check_image_number":
+        """
+        Because I want to do 3d-reconstruction, I need to check the length of image
+        should be at least two.
+        """
+        print("現在的照片有： %s 張" % str(len(color_list)))
+        if(len(color_list)==2):
+
+            return jsonify({'msg': "Yes"})
+        else:
+            return jsonify({'msg': "No"})
     elif action_name=="sayhi":
+        # 每次讀入的session都不一樣位址
+        print(len(mask_list))
+        print(mask_list[0].shape)
+        # with tf.Session(graph=pn_graph) as sess:
+        #     print(sess)
+        #     print("graph name is: ",pn_graph)
+        #     print(sess.run(c))
         return jsonify({'msg': "Hello"})
     else:
         abort(404)
@@ -145,7 +235,7 @@ labview端就不需要傳參數給action parameter
 """
 @app.route('/todo/api/v1.0/actions/<string:action_name>/<string:action_parameter>', methods=['GET'])
 def take_action_with_parameter(action_name,action_parameter):
-    global pipeline,config
+    global pipeline,config,CURRENT_POSTION
     # 基本上 裡面可以用來處理任何邏輯運算 以及需要執行甚麼動作
     print(action_name,action_parameter)
     # pipeline.start(config)
@@ -179,7 +269,54 @@ def take_action_with_parameter(action_name,action_parameter):
                 break
                 
         return jsonify({'msg': "Success"})
-    
+    # ---------------------------------------------------------------------
+    # 寫exploration algorithm的方法:
+    # photo including color and depth map
+    elif(action_name=="get_photo_and_mask"):
+        if(action_parameter not in CLASS_NAME):
+            return jsonify({'msg': "Failed WITH WRONG Parameter!"})
+        color_image=None
+        while True:
+            # Get frameset of color and depth
+            frames = pipeline.wait_for_frames()
+            # frames.get_depth_frame() is a 640x360 depth image
+            
+            # Align the depth frame to color frame
+            aligned_frames = align.process(frames)
+            
+            # Get aligned frames
+            aligned_depth_frame = aligned_frames.get_depth_frame() # aligned_depth_frame is a 640x480 depth image
+            color_frame = aligned_frames.get_color_frame()
+            
+            # Validate that both frames are valid
+            if not aligned_depth_frame or not color_frame:
+                continue
+            
+            if color_frame:
+                depth_image = np.asanyarray(aligned_depth_frame.get_data())
+                color_image = np.asanyarray(color_frame.get_data())
+                cv2.imwrite("_color2.png",color_image)
+                cv2.imwrite("_dep2.png",depth_image)
+                break
+        target_label=str(action_parameter)
+        data={}
+        # bgr to rgb
+        image=color_image[:,:,::-1]
+        data['image']=image
+        data['target_label']=target_label
+        pool=Pool(1)
+        mask=pool.apply(detect_mask_function,(data,))
+        pool.close()
+        pool.join()
+        del pool
+        if(mask is not None):
+           mask_list.append(mask)
+           color_list.append(color_image)
+           depth_list.append(depth_image)
+           pose_list.append(CURRENT_POSTION)
+           return jsonify({'msg': "Successfully detect mask"})
+        else:
+            return jsonify({'msg': "Failed"})
     elif(action_name=="others"):
         return jsonify({'msg': action_name+action_parameter})
     else:
@@ -192,4 +329,50 @@ def error_handler(error):
     return make_response(jsonify({'msg': 'Failed'}), 404)
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0',port=12345,debug = True)
+
+    DEBUG_MODE=True
+    app.run(host='0.0.0.0',port=12345,debug = DEBUG_MODE)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    # ===================================================================
+    # # Code with bugs, not recommend to use it
+    # # start an detector object
+    # elif action_name=="start_detector":
+
+    #     tf.reset_default_graph()
+    #     MASK_GENERATOR=MaskGenerator(CLASS_NAME)
+    #     MASK_GENERATOR.load_model()
+
+    #     return jsonify({'msg': "start mask detector"})
+    # # finish an detector object
+    # elif action_name=="finish_detector":
+    #     print("Clear all session in the end!!!")
+    #     # sess=tf.keras.backend.get_session()
+    #     tf.reset_default_graph()
+    #     tf.keras.backend.clear_session()
+    #     del MASK_GENERATOR
+    #     return jsonify({'msg': "finish mask detector"})
+    # elif action_name=="test_detector":
+    #     # bgr type
+    #     print(tf.keras.backend.get_session())
+    #     image=cv2.imread('./color4.png')
+    #     print(image.shape)
+    #     # rgb == skimage
+    #     image=image[:,:,::-1]
+    #     target_label="tape"
+    #     mask=MASK_GENERATOR.generateMask(target_label,image)
+    #     mask_binary=np.where(mask==1,255,0)
+    #     cv2.imwrite("mask.png",mask_binary)
+    #     return jsonify({'msg': "Sucessfully detect mask from model1"})
