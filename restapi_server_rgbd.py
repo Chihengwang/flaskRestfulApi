@@ -11,9 +11,15 @@ import time
 import json
 import tensorflow as tf
 import importlib
+import json
 from Models.maskrcnn_mask_generator import MaskGenerator
 from multiprocessing import Process,Pool
 from ra605.arm_kinematic import *
+from Config.realsense_config import RGBDCamera,HAND_EYE_TFMATRIX
+from Utils.point_cloud_tool import *
+# ignore warning
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+
 # ===============================================================
 # Multithread function for detecting mask from MaskRCNN
 # How to use?
@@ -52,6 +58,8 @@ CLASS_NAME = ['BG', 'apple','banana','box','cup','tape']
 MASK_GENERATOR=None
 # ----------------------------------------------------------------
 # Global variable
+POINT_CLOUD_PATH_FILE="pc_file_train01.json"
+REALSENSE_CAMERA=RGBDCamera()
 CURRENT_POSTION=None
 pose_list=[]
 color_list=[]
@@ -133,7 +141,11 @@ def create_6dof():
     six_degreeOfFreedom=json.loads(six_degreeOfFreedom)
     print(six_degreeOfFreedom)
     CURRENT_POSTION=forward_kinematic(six_degreeOfFreedom)
-    
+
+    CURRENT_POSTION[0:3,3]=CURRENT_POSTION[0:3,3]/1000
+    # T0_6*HAND_EYE_MATRIX
+    CURRENT_POSTION=CURRENT_POSTION.dot(HAND_EYE_TFMATRIX)
+    print(CURRENT_POSTION)
     # print("J1: ",six_degreeOfFreedom['J1'])
     # print("J2: ",six_degreeOfFreedom['J2'])
     # print("J3: ",six_degreeOfFreedom['J3'])
@@ -175,7 +187,7 @@ def delete_task(task_id):
 # 純粹希望pc端坐事情的 可以使用action name傳遞 注意後面的/不能夠省略
 @app.route('/todo/api/v1.0/actions/<string:action_name>/', methods=['GET'])
 def take_action(action_name):
-    global pipeline,config,MASK_GENERATOR
+    global pipeline,config,MASK_GENERATOR,REALSENSE_CAMERA,POINT_CLOUD_PATH_FILE
     print("url: '/todo/api/v1.0/actions/<string:action_name>'")
     if action_name==None:
         abort(404)
@@ -188,6 +200,36 @@ def take_action(action_name):
     elif action_name=="finish_stream":
         pipeline.stop()
         return jsonify({'msg': "finish stream"})
+# ==========================================================================
+    # Code with bugs, not recommend to use it
+    # start an detector object
+    elif action_name=="start_detector":
+
+        tf.reset_default_graph()
+        MASK_GENERATOR=MaskGenerator(CLASS_NAME)
+        MASK_GENERATOR.load_model()
+
+        return jsonify({'msg': "start mask detector"})
+    # finish an detector object
+    elif action_name=="finish_detector":
+        print("Clear all session in the end!!!")
+        # sess=tf.keras.backend.get_session()
+        tf.reset_default_graph()
+        tf.keras.backend.clear_session()
+        del MASK_GENERATOR
+        return jsonify({'msg': "finish mask detector"})
+    elif action_name=="test_detector":
+        # bgr type
+        print(tf.keras.backend.get_session())
+        image=cv2.imread('./color4.png')
+        print(image.shape)
+        # rgb == skimage
+        image=image[:,:,::-1]
+        target_label="tape"
+        mask=MASK_GENERATOR.generateMask(target_label,image)
+        mask_binary=np.where(mask==1,255,0)
+        cv2.imwrite("mask.png",mask_binary)
+        return jsonify({'msg': "Sucessfully detect mask from model1"})
 # ==========================================================================
     # testing multithread with MaskRCNN model
     elif action_name=="multithread":
@@ -205,6 +247,8 @@ def take_action(action_name):
         pool.join()
         del pool
         return jsonify({'msg': "multithread test!!!"})
+    # ===============================================================================
+    # 這個action主要用來處理儲存的問題
     elif action_name=="check_image_number":
         """
         Because I want to do 3d-reconstruction, I need to check the length of image
@@ -212,10 +256,37 @@ def take_action(action_name):
         """
         print("現在的照片有： %s 張" % str(len(color_list)))
         if(len(color_list)==2):
-
-            return jsonify({'msg': "Yes"})
+            # 這邊要儲存partial point cloud file 還有其路徑
+            folder_name="pointnet_data"
+            if os.path.isdir(folder_name):
+                print("The point cloud is saving in: /",folder_name)
+            else:
+                os.makedirs(folder_name)
+            ply_points,xyz_points=join_map_with_mask(pose_list,color_list,depth_list,mask_list,REALSENSE_CAMERA)
+            if(xyz_points.shape[0]>=2500):
+                file_name=time.strftime("%d-%m-%Y-%H-%M-%S")
+                full_json_path='./'+folder_name+'/'+POINT_CLOUD_PATH_FILE
+                pc_json_file=open(full_json_path,'r')
+                path_list=json.load(pc_json_file)
+                full_path_name=folder_name+"/"+file_name+".ply"
+                print(full_path_name)
+                print(type(path_list))
+                path_list.append(full_path_name)
+                pc_json_file.close()
+                pc_json_file=open(full_json_path,'w')
+                json.dump(path_list,pc_json_file)
+                pc_json_file.close()
+                savePoints_to_ply(folder_name,file_name+".ply",ply_points)
+                pose_list.clear()
+                color_list.clear()
+                depth_list.clear()
+                mask_list.clear()
+                return jsonify({'msg': "Yes"})
+            else:
+                return jsonify({'msg': "No"})                
         else:
             return jsonify({'msg': "No"})
+    # ==========================================================================
     elif action_name=="sayhi":
         # 每次讀入的session都不一樣位址
         print(len(mask_list))
@@ -227,6 +298,8 @@ def take_action(action_name):
         return jsonify({'msg': "Hello"})
     else:
         abort(404)
+    # ==========================================================================
+
 """
 這裡面的寫法必須注意的事情有：
 1.要進來這個route就是必須傳遞parameter，否則會走上面那個路徑
@@ -300,7 +373,7 @@ def take_action_with_parameter(action_name,action_parameter):
                 break
         target_label=str(action_parameter)
         data={}
-        # bgr to rgb
+        # bgr to rgb for detection
         image=color_image[:,:,::-1]
         data['image']=image
         data['target_label']=target_label
@@ -310,11 +383,17 @@ def take_action_with_parameter(action_name,action_parameter):
         pool.join()
         del pool
         if(mask is not None):
-           mask_list.append(mask)
-           color_list.append(color_image)
-           depth_list.append(depth_image)
-           pose_list.append(CURRENT_POSTION)
-           return jsonify({'msg': "Successfully detect mask"})
+            # 換成用image套件讀入
+            # color要傳入 rgb的img
+            color_img = Image.fromarray(image.astype('uint8'), 'RGB')
+            depth_img = Image.fromarray(depth_image)
+            mask_img = Image.fromarray(np.uint8(mask))
+            # 儲存起來所有資訊
+            mask_list.append(mask_img)
+            color_list.append(color_img)
+            depth_list.append(depth_img)
+            pose_list.append(CURRENT_POSTION)
+            return jsonify({'msg': "Successfully detect mask"})
         else:
             return jsonify({'msg': "Failed"})
     elif(action_name=="others"):

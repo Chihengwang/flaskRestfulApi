@@ -82,31 +82,34 @@ class MaskGenerator:
         self.class_names=class_names
         print("Create MaskRCNN detector!!!")
     def load_model(self):
-        config=tf.ConfigProto()
-        config.gpu_options.allow_growth=True
+        # config=tf.ConfigProto()
+        # config.gpu_options.allow_growth=True
         # config.gpu_options.per_process_gpu_memory_fraction=0.9
-        tf.keras.backend.set_session(tf.Session(config=config))
-        self.graph=tf.get_default_graph()
+        # tf.keras.backend.set_session(tf.Session(config=config))
+        self.graph=tf.Graph()
         with self.graph.as_default():
-            # Create model object in inference mode.
-            self.model = modellib.MaskRCNN(mode="inference", model_dir=MODEL_DIR, config=self.config)
+            self.session=tf.Session()
+            with self.session.as_default():
+                # Create model object in inference mode.
+                self.model = modellib.MaskRCNN(mode="inference", model_dir=MODEL_DIR, config=self.config)
 
-            # Load weights trained on MS-COCO
-            self.model.load_weights(MODEL_PATH, by_name=True)
+                # Load weights trained on MS-COCO
+                self.model.load_weights(MODEL_PATH, by_name=True)
     def generateMask(self,label,image):
 
         with self.graph.as_default():
-            print("graph is: ",self.graph)
-            results=self.model.detect([image], verbose=1)
-            r = results[0]
-            target_index=self.class_names.index(label)
-            # can find the instance
-            if(target_index in r['class_ids']):
-                idx=list(r['class_ids']).index(target_index)
-                return   r['masks'][:,:,idx].astype(int)
-            # if not
-            else:
-                return None
+            with self.session.as_default():
+                print("graph is: ",self.graph)
+                results=self.model.detect([image], verbose=1)
+                r = results[0]
+                target_index=self.class_names.index(label)
+                # can find the instance
+                if(target_index in r['class_ids']):
+                    idx=list(r['class_ids']).index(target_index)
+                    return   r['masks'][:,:,idx].astype(int)
+                # if not
+                else:
+                    return None
 
 
 if __name__=="__main__":

@@ -67,3 +67,9 @@ Flask restful api
 >>* 新增check image number用來停止labview端的動作
 >>* [x] 仍須要完成ply檔案的儲存
 >>* [x] 完善收取6DOF的資料
+
+>>
+>2019/12/06
+>>* 完成ply檔案的儲存
+>>* complete 收取6DOF的資料
+>>* finish examining the procedure of exploration algorithm

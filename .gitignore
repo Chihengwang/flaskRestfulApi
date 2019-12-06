@@ -29,3 +29,7 @@ app.py
 *.jpg
 my_dataset/*
 *.png
+
+
+# ply file folder
+pointnet_data
