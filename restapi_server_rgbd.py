@@ -38,7 +38,12 @@ def detect_mask_function(data):
     mask=MASK_GENERATOR.generateMask(data['target_label'],data['image'])
     mask_binary=np.where(mask==1,255,0)
     cv2.imwrite(data['target_label']+".png",mask_binary)
+    # partial point cloud 太少的話 就回傳none
+    print("mask的點數為： %d" %(len(np.where(mask==1)[0]),))
+    if(len(np.where(mask==1)[0])<5000):
+        mask=None
     # realse data from gpu
+    print(mask)
     tf.keras.backend.clear_session()
     del MASK_GENERATOR
     return mask
@@ -235,12 +240,12 @@ def take_action(action_name):
     elif action_name=="multithread":
         data={}
 
-        image=cv2.imread('./color4.png')
+        image=cv2.imread('./frame-09-10-2019-11-40-23.png')
         print(image.shape)
         # rgb == skimage
         image=image[:,:,::-1]
         data['image']=image
-        data['target_label']="cup"
+        data['target_label']="banana"
         pool=Pool(1)
         mask_list.append(pool.apply(detect_mask_function,(data,)))
         pool.close()
@@ -263,7 +268,7 @@ def take_action(action_name):
             else:
                 os.makedirs(folder_name)
             ply_points,xyz_points=join_map_with_mask(pose_list,color_list,depth_list,mask_list,REALSENSE_CAMERA)
-            if(xyz_points.shape[0]>=2500):
+            if(xyz_points.shape[0]>=10000):
                 file_name=time.strftime("%d-%m-%Y-%H-%M-%S")
                 full_json_path='./'+folder_name+'/'+POINT_CLOUD_PATH_FILE
                 pc_json_file=open(full_json_path,'r')
@@ -283,6 +288,10 @@ def take_action(action_name):
                 mask_list.clear()
                 return jsonify({'msg': "Yes"})
             else:
+                pose_list.clear()
+                color_list.clear()
+                depth_list.clear()
+                mask_list.clear()
                 return jsonify({'msg': "No"})                
         else:
             return jsonify({'msg': "No"})
