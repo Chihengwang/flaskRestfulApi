@@ -29,7 +29,8 @@ test_pca_ik.py
 *.jpg
 my_dataset/*
 *.png
-
+show_ply.py
 
 # ply file folder
 pointnet_data
+plyData

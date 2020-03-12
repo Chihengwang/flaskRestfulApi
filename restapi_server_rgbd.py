@@ -40,7 +40,7 @@ def detect_mask_function(data):
     cv2.imwrite(data['target_label']+".png",mask_binary)
     # partial point cloud 太少的話 就回傳none
     print("mask的點數為： %d" %(len(np.where(mask==1)[0]),))
-    if(len(np.where(mask==1)[0])<5000):
+    if(len(np.where(mask==1)[0])<2500):
         mask=None
     # realse data from gpu
     print(mask)
@@ -70,6 +70,8 @@ pose_list=[]
 color_list=[]
 depth_list=[]
 mask_list=[]
+detect_count=0
+SAVE_DIRECTORY="pointnet_data_v3"
 app = Flask(__name__)
 # =================================================================
 # Parameters
@@ -192,7 +194,7 @@ def delete_task(task_id):
 # 純粹希望pc端坐事情的 可以使用action name傳遞 注意後面的/不能夠省略
 @app.route('/todo/api/v1.0/actions/<string:action_name>/', methods=['GET'])
 def take_action(action_name):
-    global pipeline,config,MASK_GENERATOR,REALSENSE_CAMERA,POINT_CLOUD_PATH_FILE
+    global pipeline,config,MASK_GENERATOR,REALSENSE_CAMERA,POINT_CLOUD_PATH_FILE,detect_count,SAVE_DIRECTORY
     print("url: '/todo/api/v1.0/actions/<string:action_name>'")
     if action_name==None:
         abort(404)
@@ -203,6 +205,11 @@ def take_action(action_name):
         pipeline.start(config)
         return jsonify({'msg': "start stream"})
     elif action_name=="finish_stream":
+        if(len(color_list)!=0):
+            pose_list.clear()
+            color_list.clear()
+            depth_list.clear()
+            mask_list.clear()        
         pipeline.stop()
         return jsonify({'msg': "finish stream"})
 # ==========================================================================
@@ -260,15 +267,16 @@ def take_action(action_name):
         should be at least two.
         """
         print("現在的照片有： %s 張" % str(len(color_list)))
-        if(len(color_list)==2):
+        print("現在的次數有： %s 次" % str(detect_count))
+        if(len(color_list)==1):
             # 這邊要儲存partial point cloud file 還有其路徑
-            folder_name="pointnet_data"
+            folder_name=SAVE_DIRECTORY
             if os.path.isdir(folder_name):
                 print("The point cloud is saving in: /",folder_name)
             else:
                 os.makedirs(folder_name)
             ply_points,xyz_points=join_map_with_mask(pose_list,color_list,depth_list,mask_list,REALSENSE_CAMERA)
-            if(xyz_points.shape[0]>=10000):
+            if(xyz_points.shape[0]>=4000):
                 file_name=time.strftime("%d-%m-%Y-%H-%M-%S")
                 full_json_path='./'+folder_name+'/'+POINT_CLOUD_PATH_FILE
                 pc_json_file=open(full_json_path,'r')
@@ -286,7 +294,10 @@ def take_action(action_name):
                 color_list.clear()
                 depth_list.clear()
                 mask_list.clear()
-                return jsonify({'msg': "Yes"})
+                if(detect_count==5):
+                    detect_count=0
+                    return jsonify({'msg': "Yes"})
+                return jsonify({'msg': "No"})
             else:
                 pose_list.clear()
                 color_list.clear()
@@ -317,7 +328,7 @@ labview端就不需要傳參數給action parameter
 """
 @app.route('/todo/api/v1.0/actions/<string:action_name>/<string:action_parameter>', methods=['GET'])
 def take_action_with_parameter(action_name,action_parameter):
-    global pipeline,config,CURRENT_POSTION
+    global pipeline,config,CURRENT_POSTION,detect_count
     # 基本上 裡面可以用來處理任何邏輯運算 以及需要執行甚麼動作
     print(action_name,action_parameter)
     # pipeline.start(config)
@@ -377,6 +388,7 @@ def take_action_with_parameter(action_name,action_parameter):
             if color_frame:
                 depth_image = np.asanyarray(aligned_depth_frame.get_data())
                 color_image = np.asanyarray(color_frame.get_data())
+                cv2.imwrite(SAVE_DIRECTORY+"/"+"frame-" + time.strftime("%d-%m-%Y-%H-%M-%S") + ".png",color_image)
                 cv2.imwrite("_color2.png",color_image)
                 cv2.imwrite("_dep2.png",depth_image)
                 break
@@ -402,8 +414,10 @@ def take_action_with_parameter(action_name,action_parameter):
             color_list.append(color_img)
             depth_list.append(depth_img)
             pose_list.append(CURRENT_POSTION)
+            detect_count+=1
             return jsonify({'msg': "Successfully detect mask"})
         else:
+            detect_count+=1
             return jsonify({'msg': "Failed"})
     elif(action_name=="others"):
         return jsonify({'msg': action_name+action_parameter})
