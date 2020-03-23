@@ -21,6 +21,30 @@ depth_list=[]
 mask_list=[]
 count=0
 # ==================================================================
+# test predict json
+prediction={
+    'msg':'Yes',
+    'width':12.512,
+    '6dof_ready':{
+        'j1':12.23,
+        'j2':43.43,
+        'j3':-23.12,
+        'j4':-32,
+        'j5':54,
+        'j6':12
+    },
+    '6dof_grasp':{
+        'j1':1,
+        'j2':2,
+        'j3':3,
+        'j4':4,
+        'j5':5,
+        'j6':6
+    },
+    # 0 or 1
+    'mode': 0
+}
+# ==================================================================
 # testing data
 tasks = [
     {
@@ -140,7 +164,7 @@ def take_action(action_name):
         }
         return jsonify(json_string)
     elif action_name=="sayhi":
-        return jsonify({'msg': "Hello"})
+        return jsonify(prediction)
     else:
         abort(404)
 """

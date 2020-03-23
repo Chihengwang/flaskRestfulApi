@@ -73,3 +73,7 @@ Flask restful api
 >>* 完成ply檔案的儲存
 >>* complete 收取6DOF的資料
 >>* finish examining the procedure of exploration algorithm
+
+>>
+>2020/03/23
+>>* 完成prediction 測試
